@@ -1,0 +1,68 @@
+import os
+import openai
+from dotenv import load_dotenv
+import csv
+
+# Load your API key from the .env file
+load_dotenv()
+
+# Set the OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Verify that the API key is loaded
+if not openai.api_key:
+    raise ValueError("OPENAI_API_KEY not found in environment variables.")
+
+# Define experiment parameters
+questions = [
+    "What are the benefits and drawbacks of using AI in education?",
+    "How can AI be used to address climate change?",
+    "What are the ethical implications of self-driving cars?"
+]
+temperatures = [0.2, 0.5, 0.8, 1.0]
+num_responses_per_temp = 3
+
+# CSV filename
+csv_filename = "ai_temperature_experiment_results-test.csv"
+
+# Create a CSV file and write headers (if it doesn't exist)
+if not os.path.isfile(csv_filename):
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(["question", "temperature", "response", "response_length", "finish_reason"])
+
+# Run the experiment and save to CSV after each iteration
+for question in questions:
+    for temp in temperatures:
+        for i in range(num_responses_per_temp):
+            try:
+                response =openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Ensure you're using the desired model
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": question},
+                    ],
+                    temperature=temp
+                )
+
+                # Extract information from the response
+                choice = response.choices[0]
+                response_text = choice.message['content'].strip()
+                response_length = len(response_text)
+                finish_reason = choice.finish_reason
+
+                # Append data to the CSV file
+                with open(csv_filename, 'a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([question, temp, response_text, response_length, finish_reason])
+
+                print(f"Logged response {i+1} for question '{question}' with temperature {temp}")
+
+            except openai.OpenAIError as e:
+                print(f"An OpenAI error occurred: {e}")
+                # Optionally, log the error to a separate file or handle it accordingly
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
+                # Handle other potential exceptions
+
+print("Experiment complete. Data saved to ai_temperature_experiment_results.csv")
