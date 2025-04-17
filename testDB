@@ -1,0 +1,30 @@
+import pyodbc
+
+conn_str = (
+    r"DRIVER={ODBC Driver 17 for SQL Server};"
+    r"SERVER=KHALID\SQLEXPRESS;"
+    r"DATABASE=CustomerManagement;"
+    r"Trusted_Connection=yes;"
+)
+
+try:
+    conn = pyodbc.connect(conn_str)
+    print("Connected to SQL Server")
+
+    cursor = conn.cursor()
+    
+    # Run SELECT query
+    cursor.execute("SELECT CustomerID, FirstName, LastName, HomeAddress, OfficeAddress, Phone, Email FROM Customer")
+    
+    # Fetch and print results
+    rows = cursor.fetchall()
+    for row in rows:
+        print(f"ID: {row.CustomerID}, Name: {row.FirstName} {row.LastName}, Home: {row.HomeAddress}, "
+              f"Office: {row.OfficeAddress}, Phone: {row.Phone}, Email: {row.Email}")
+    
+except pyodbc.Error as e:
+    print("Database error:", e)
+
+finally:
+    if 'conn' in locals():
+        conn.close()
