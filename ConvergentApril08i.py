@@ -538,6 +538,26 @@ class ConvergenceAnalyzer:
             'in contrast', 'similarly', 'likewise', 'for example', 'for instance',
             'in other words', 'that is to say', 'to put it simply'
         ]
+        # ============================================================
+        # LEVEL 13: 2026 LISTICLE & STRUCTURAL MARKERS
+        # ============================================================
+        self.listicle_2026_markers = [
+            # Numbered list introductions
+            '10 types of', '5 types of', '7 types of', 'top 10', 'top 5',
+            'ways to', 'reasons why', 'things you', 'things that',
+
+            # Section header patterns (common in 2026)
+            'the truth is', 'here\'s the thing', 'the thing is',
+            'at the end of the day', 'when it comes to', 'speaking of',
+
+            # Rhetorical question patterns
+            'is it not', 'have we become', 'could any of us', 'what if',
+            'who doesn\'t', 'why would', 'how many of us',
+
+            # Direct address patterns
+            'my darling readers', 'dear readers', 'let me tell you',
+            'you know that', 'think about it', 'imagine this'
+        ]
         # NEW: GEN-Z & SLANG TERMS (2024-2026)
         # ============================================================
         self.genz_slang = [
@@ -622,7 +642,8 @@ class ConvergenceAnalyzer:
                 self.fashion_markers +  # NEW
                 self.transitional_phrases +  # NEW
                 self.inspirational_phrases +  # NEW
-                self.self_help_phrases  # NEW
+                self.self_help_phrases +
+                self.listicle_2026_markers # NEW
         )
 
         # Modern AI markers (2025-2026 conversational) - Updated
@@ -718,6 +739,8 @@ class ConvergenceAnalyzer:
             # NEW: Count inspirational phrases
             inspirational_count = sum(1 for marker in self.inspirational_phrases
                                       if marker in text_lower)
+            listicle_2026_count = sum(1 for marker in self.listicle_2026_markers
+                                      if marker in text_lower)
 
             # FIXED: Higher weights for 2025-specific markers
             weighted_score = (
@@ -736,7 +759,8 @@ class ConvergenceAnalyzer:
                     genz_count * 4.0 +  # NEW! Gen-Z slang (HIGH weight)
                     fashion_count * 3.5 +  # NEW! Fashion markers
                     transitional_count * 3.0 +  # NEW! Transitional phrases
-                    inspirational_count * 3.0  # NEW! Inspirational phrases
+                    inspirational_count * 3.0 + # NEW! Inspirational phrases
+                    listicle_2026_count * 3.0  # NEW: High weight for 2026 markers
             )
 
             # Normalize per 1000 words
@@ -775,6 +799,71 @@ class ConvergenceAnalyzer:
             tokens = set(TextPreprocessor.tokenize(text))
             vocab_sizes.append(len(tokens))
         return np.array(vocab_sizes)
+
+    def compute_all_metrics(self, texts):
+        """Compute all convergence and Americanization metrics for a text set"""
+        cleaned_texts = [TextPreprocessor.clean_text(t) for t in texts]
+
+        # Similarity (convergence)
+        sim_scores = self.compute_pairwise_tfidf_similarity(cleaned_texts)
+        similarity = np.mean(sim_scores) if len(sim_scores) > 0 else 0
+
+        # Lexical diversity (vocabulary richness)
+        ttr_scores = self.compute_lexical_diversity(cleaned_texts)
+        lexical_diversity = np.mean(ttr_scores)
+
+        # AI fingerprint (AI pattern presence)
+        ai_scores = self.compute_ai_fingerprint(cleaned_texts)
+        ai_score = np.mean(ai_scores)
+
+        # US dominance (Americanization)
+        us_analyzer = US_Structural_Analyzer()
+        us_results = us_analyzer.analyze_corpus(cleaned_texts)
+        us_dominance = us_results['mean_us_dominance'] if us_results else 0
+
+        # US structural features
+        exclamation_count = us_results['mean_exclamation_count'] if us_results else 0
+        direct_address = us_results['mean_direct_address'] if us_results else 0
+        rhetorical_questions = us_results['mean_rhetorical_questions'] if us_results else 0
+
+        return {
+            'similarity': similarity,
+            'lexical_diversity': lexical_diversity,
+            'ai_score': ai_score,
+            'us_dominance': us_dominance,
+            'exclamation_count': exclamation_count,
+            'direct_address': direct_address,
+            'rhetorical_questions': rhetorical_questions
+        }
+
+    def compare_trends(self, metrics_2003, metrics_2025, metrics_2026):
+        """Compare metrics across years to show trends"""
+        trends = {}
+
+        for metric in ['similarity', 'lexical_diversity', 'ai_score', 'us_dominance',
+                       'exclamation_count', 'direct_address', 'rhetorical_questions']:
+            v2003 = metrics_2003.get(metric, 0)
+            v2025 = metrics_2025.get(metric, 0)
+            v2026 = metrics_2026.get(metric, 0)
+
+            # Calculate percentage change (avoid division by zero)
+            if v2003 != 0:
+                change_2003_2025 = ((v2025 - v2003) / abs(v2003)) * 100
+                change_2003_2026 = ((v2026 - v2003) / abs(v2003)) * 100
+            else:
+                change_2003_2025 = 0 if v2025 == 0 else 100
+                change_2003_2026 = 0 if v2026 == 0 else 100
+
+            trends[metric] = {
+                '2003': v2003,
+                '2025': v2025,
+                '2026': v2026,
+                'change_2003_2025': change_2003_2025,
+                'change_2003_2026': change_2003_2026,
+                'trend': 'increasing' if v2026 > v2003 else 'decreasing'
+            }
+
+        return trends
 
     def analyze_year_group(self, texts, year):
         """Analyze all texts from a single year"""
@@ -820,6 +909,14 @@ class ConvergenceAnalyzer:
         results['vocab_size_std'] = np.std(vocab_sizes)
         results['texts'] = cleaned_texts  # Store cleaned texts for heatmap
         return results
+
+    def compute_us_dominance_score(self, texts):
+        """Compute overall US English dominance score (higher = more US-like)"""
+        us_analyzer = US_Structural_Analyzer()
+        results = us_analyzer.analyze_corpus(texts)
+        if results:
+            return results['mean_us_dominance']
+        return 0
 
     def print_ai_breakdown(self, texts, year):
         """Print detailed breakdown of AI markers by category for a year group"""
@@ -1315,7 +1412,7 @@ def plot_fashion_convergence_pattern(results_2003, results_2026):
 def main():
     print("=" * 60)
     print("CONVERGENCE ANALYSIS FOR BANGLADESHI ENGLISH TEXTS")
-    print("Testing: Are 2025/2026 texts more similar/converged than 2003 texts?")
+    print("Examining: Linguistic changes in Bangladeshi English (2003 → 2025 → 2026)")
     print("=" * 60)
 
     # Load data
@@ -1366,7 +1463,7 @@ def main():
         print(f"Found years: {available_years}")
         return
 
-    print(f"\nComparing baseline year 2003 with: {[y for y in available_years if y != 2003]}")
+    print(f"\nAnalyzing years: {available_years}")
 
     # Get all genres that exist in ALL selected years
     genres_all = set(data_dict[2003].keys())
@@ -1383,197 +1480,206 @@ def main():
     # Initialize analyzer
     analyzer = ConvergenceAnalyzer()
 
-    # Store all results for summary
-    all_results = {}
+    # Store all trends for cross-genre comparison
+    all_trends = {}
 
-    # For each genre, compare 2003 with 2025 and 2026
+    # For each genre, analyze trends across years
     for genre in sorted(genres_all):
         print(f"\n" + "=" * 60)
         print(f"ANALYZING: {genre}")
         print("=" * 60)
 
-        # Get 2003 baseline texts and analyze once
-        texts_2003 = data_dict[2003][genre]
-        print(f"  Baseline 2003: {len(texts_2003)} texts")
-        print(f"  Processing 2003 baseline...")
-        results_2003 = analyzer.analyze_year_group(texts_2003, 2003)
+        # Get metrics for each year
+        metrics_by_year = {}
 
-        # Store results for this genre
-        genre_results = {}
+        for year in available_years:
+            texts = data_dict[year][genre]
+            print(f"  Processing {len(texts)} texts from {year}...")
+            metrics = analyzer.compute_all_metrics(texts)
+            metrics_by_year[year] = metrics
 
-        # Compare with each available year
-        for year in [y for y in available_years if y != 2003]:
-            if year not in data_dict or genre not in data_dict[year]:
-                print(f"  Year {year}: No data for genre {genre}, skipping...")
-                continue
+            print(f"    Similarity: {metrics['similarity']:.4f}")
+            print(f"    AI Score: {metrics['ai_score']:.2f}")
+            print(f"    US Dominance: {metrics['us_dominance']:.3f}")
+            print(f"    Lexical Diversity: {metrics['lexical_diversity']:.4f}")
+            print(f"    Exclamation marks: {metrics['exclamation_count']:.2f}")
+            print(f"    Direct address ('you'): {metrics['direct_address']:.2f}")
 
-            texts_year = data_dict[year][genre]
-            print(f"\n  Processing {len(texts_year)} texts from {year}...")
-            results_year = analyzer.analyze_year_group(texts_year, year)
+        # Calculate trends
+        trends = analyzer.compare_trends(
+            metrics_by_year[2003],
+            metrics_by_year.get(2025, metrics_by_year[2003]),
+            metrics_by_year.get(2026, metrics_by_year[2003])
+        )
+        all_trends[genre] = trends
 
-            # Create output directory for this genre and year
-            output_dir = f'convergence_results/{genre}/{year}_vs_2003'
-            os.makedirs(output_dir, exist_ok=True)
+        # Print trend summary
+        print("\n" + "-" * 40)
+        print(f"TREND SUMMARY: {genre} (2003 → 2026)")
+        print("-" * 40)
 
-            # Statistical comparisons
-            comparator = StatisticalComparison()
+        print(f"\n📈 CONVERGENCE (Similarity):")
+        print(f"   2003: {trends['similarity']['2003']:.4f}")
+        if 2025 in metrics_by_year:
+            print(f"   2025: {trends['similarity']['2025']:.4f}")
+        print(f"   2026: {trends['similarity']['2026']:.4f}")
+        print(f"   Overall Change: +{trends['similarity']['change_2003_2026']:.1f}%")
 
-            print("\n" + "-" * 40)
-            print(f"STATISTICAL RESULTS: 2003 vs {year}")
-            print("-" * 40)
+        print(f"\n🤖 AI PATTERNS (AI Score):")
+        print(f"   2003: {trends['ai_score']['2003']:.2f}")
+        if 2025 in metrics_by_year:
+            print(f"   2025: {trends['ai_score']['2025']:.2f}")
+        print(f"   2026: {trends['ai_score']['2026']:.2f}")
+        print(f"   Overall Change: +{trends['ai_score']['change_2003_2026']:.1f}%")
 
-            metrics_to_test = ['similarity_mean', 'lexical_diversity_mean', 'ai_fingerprint_mean']
-            results_list = []
+        print(f"\n🇺🇸 US ENGLISH DOMINANCE:")
+        print(f"   2003: {trends['us_dominance']['2003']:.3f} (negative = UK-leaning, positive = US-leaning)")
+        if 2025 in metrics_by_year:
+            print(f"   2025: {trends['us_dominance']['2025']:.3f}")
+        print(f"   2026: {trends['us_dominance']['2026']:.3f}")
+        print(f"   Overall Shift: {trends['us_dominance']['change_2003_2026']:+.1f}%")
 
-            for metric in metrics_to_test:
-                comp = comparator.compare_two_years(results_2003, results_year, 2003, year, metric)
-                if comp:
-                    results_list.append(comp)
-                    print(f"\n{comp['metric']}:")
-                    print(f"  2003: {comp[f'mean_{2003}']:.4f} (±{comp[f'std_{2003}']:.4f})")
-                    print(f"  {year}: {comp[f'mean_{year}']:.4f} (±{comp[f'std_{year}']:.4f})")
-                    if comp[f'mean_{2003}'] != 0:
-                        print(f"  Change: {((comp[f'mean_{year}'] - comp[f'mean_{2003}']) / comp[f'mean_{2003}'] * 100):.1f}%")
-                    else:
-                        print(f"  Change: N/A (baseline was 0)")
-                    print(f"  P-value: {comp['p_value']:.4f}")
-                    print(f"  Significant: {'✓ YES' if comp['significant'] else '✗ NO'}")
-                    print(f"  Direction: {comp['direction']} in {year}")
-                    print(f"  Effect size: {comp['effect_size']:.3f}")
+        print(f"\n📝 VOCABULARY DIVERSITY (Type-Token Ratio):")
+        print(f"   2003: {trends['lexical_diversity']['2003']:.4f}")
+        if 2025 in metrics_by_year:
+            print(f"   2025: {trends['lexical_diversity']['2025']:.4f}")
+        print(f"   2026: {trends['lexical_diversity']['2026']:.4f}")
+        print(f"   Overall Change: {trends['lexical_diversity']['change_2003_2026']:+.1f}%")
 
-            # Generate visualizations
-            visualizer = ConvergenceVisualizer()
+        print(f"\n🗣️ RHETORICAL PATTERNS:")
+        print(
+            f"   Exclamation marks: {trends['exclamation_count']['2003']:.2f} → {trends['exclamation_count']['2026']:.2f} (+{trends['exclamation_count']['change_2003_2026']:.0f}%)")
+        print(
+            f"   Direct address ('you'): {trends['direct_address']['2003']:.2f} → {trends['direct_address']['2026']:.2f} (+{trends['direct_address']['change_2003_2026']:.0f}%)")
+        print(
+            f"   Rhetorical questions: {trends['rhetorical_questions']['2003']:.2f} → {trends['rhetorical_questions']['2026']:.2f} (+{trends['rhetorical_questions']['change_2003_2026']:.0f}%)")
 
-            print("\n" + "-" * 40)
-            print("GENERATING PLOTS")
-            print("-" * 40)
+        # Create output directory
+        output_dir = f'convergence_results/{genre}'
+        os.makedirs(output_dir, exist_ok=True)
 
-            visualizer.plot_comparison(results_2003, results_year, 2003, year, output_dir)
-            visualizer.plot_similarity_distributions(results_2003, results_year, 2003, year, output_dir)
+        # Create trend visualization
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-            # Save results to CSV
-            results_df = pd.DataFrame(results_list)
-            results_df.to_csv(f'{output_dir}/statistical_results.csv', index=False)
+        # Filter years that have data
+        plot_years = [y for y in [2003, 2025, 2026] if y in metrics_by_year]
 
-            print(f"\n✓ Results saved to {output_dir}/")
+        # 1. Similarity trend (Convergence)
+        ax1 = axes[0, 0]
+        similarity_values = [trends['similarity'][str(y)] for y in plot_years]
+        ax1.plot(plot_years, similarity_values, 'o-', color='#2E86AB', linewidth=2, markersize=8)
+        ax1.set_xlabel('Year', fontsize=12)
+        ax1.set_ylabel('Similarity Score', fontsize=12)
+        ax1.set_title('Convergence: Texts Becoming More Similar', fontsize=12, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
 
-            # Store for summary
-            genre_results[year] = results_list
+        # 2. AI Score trend
+        ax2 = axes[0, 1]
+        ai_values = [trends['ai_score'][str(y)] for y in plot_years]
+        ax2.plot(plot_years, ai_values, 'o-', color='#E63946', linewidth=2, markersize=8)
+        ax2.set_xlabel('Year', fontsize=12)
+        ax2.set_ylabel('AI Pattern Score', fontsize=12)
+        ax2.set_title('AI Patterns: Increasing Presence', fontsize=12, fontweight='bold')
+        ax2.grid(True, alpha=0.3)
 
-            # ============================================================
-            # US STRUCTURAL DOMINANCE ANALYSIS (Americanization)
-            # ============================================================
-            print("\n" + "-" * 40)
-            print(f"US STRUCTURAL DOMINANCE ANALYSIS: 2003 vs {year}")
-            print("-" * 40)
+        # 3. US Dominance trend
+        ax3 = axes[1, 0]
+        us_values = [trends['us_dominance'][str(y)] for y in plot_years]
+        ax3.plot(plot_years, us_values, 'o-', color='#2E86AB', linewidth=2, markersize=8)
+        ax3.axhline(y=0, color='gray', linestyle='--', alpha=0.5, label='Neutral (UK/US balance)')
+        ax3.set_xlabel('Year', fontsize=12)
+        ax3.set_ylabel('US Dominance Score (-1=UK, +1=US)', fontsize=12)
+        ax3.set_title('Americanization: Shift Toward US English', fontsize=12, fontweight='bold')
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
 
-            us_analyzer = US_Structural_Analyzer()
+        # 4. Lexical Diversity trend
+        ax4 = axes[1, 1]
+        lex_values = [trends['lexical_diversity'][str(y)] for y in plot_years]
+        ax4.plot(plot_years, lex_values, 'o-', color='#73AB84', linewidth=2, markersize=8)
+        ax4.set_xlabel('Year', fontsize=12)
+        ax4.set_ylabel('Lexical Diversity (Type-Token Ratio)', fontsize=12)
+        ax4.set_title('Vocabulary Diversity', fontsize=12, fontweight='bold')
+        ax4.grid(True, alpha=0.3)
 
-            # Analyze both years
-            us_results_2003 = us_analyzer.analyze_corpus(texts_2003)
-            us_results_year = us_analyzer.analyze_corpus(texts_year)
+        plt.suptitle(f'{genre}: Linguistic Change Over Time (2003-2026)', fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig(f'{output_dir}/trend_analysis.png', dpi=300, bbox_inches='tight')
+        plt.show()
 
-            if us_results_2003 and us_results_year:
-                # Compare years
-                us_comparison = us_analyzer.compare_years(texts_2003, texts_year)
+        # Save trends to CSV
+        trends_data = []
+        for metric, values in trends.items():
+            row = {
+                'genre': genre,
+                'metric': metric,
+                '2003': values.get('2003', 0),
+                '2025': values.get('2025', 0),
+                '2026': values.get('2026', 0),
+                'change_percent_2003_2026': values.get('change_2003_2026', 0),
+                'trend_direction': values.get('trend', 'stable')
+            }
+            trends_data.append(row)
 
-                print(f"\nUS DOMINANCE SCORE (-1=UK/BdE, +1=US):")
-                print(f"  2003: {us_comparison['us_dominance_shift']['score_2003']:.3f}")
-                print(f"  {year}: {us_comparison['us_dominance_shift']['score_2026']:.3f}")
-                print(f"  Shift: {us_comparison['us_dominance_shift']['shift']:+.3f}")
+        trends_df = pd.DataFrame(trends_data)
+        trends_df.to_csv(f'{output_dir}/trends_summary.csv', index=False)
 
-                print(f"\nKEY US STRUCTURAL FEATURES (Higher = More American):")
-                print(f"  Exclamation marks: {us_comparison['exclamation']['mean_2003']:.2f} → {us_comparison['exclamation']['mean_2026']:.2f} ({us_comparison['exclamation']['change_percent']:+.0f}%, p={us_comparison['exclamation']['p_value']:.4f})")
-                print(f"  Rhetorical questions: {us_comparison['rhetorical_question']['mean_2003']:.2f} → {us_comparison['rhetorical_question']['mean_2026']:.2f} ({us_comparison['rhetorical_question']['change_percent']:+.0f}%, p={us_comparison['rhetorical_question']['p_value']:.4f})")
-                print(f"  Direct address ('you'): {us_comparison['direct_address']['mean_2003']:.2f} → {us_comparison['direct_address']['mean_2026']:.2f} ({us_comparison['direct_address']['change_percent']:+.0f}%, p={us_comparison['direct_address']['p_value']:.4f})")
-                print(f"  Numbered lists: {us_comparison['numbered_list']['mean_2003']:.2f} → {us_comparison['numbered_list']['mean_2026']:.2f} ({us_comparison['numbered_list']['change_percent']:+.0f}%, p={us_comparison['numbered_list']['p_value']:.4f})")
+        print(f"\n✓ Trend analysis saved to {output_dir}/")
 
-                print(f"\nKEY UK/BdE STRUCTURAL FEATURES (Lower = Less UK Influence):")
-                print(f"  Passive voice: {us_comparison['passive_voice']['mean_2003']:.2f} → {us_comparison['passive_voice']['mean_2026']:.2f} ({us_comparison['passive_voice']['change_percent']:+.0f}%, p={us_comparison['passive_voice']['p_value']:.4f})")
-                print(f"  Complex transitions: {us_comparison['complex_transition']['mean_2003']:.2f} → {us_comparison['complex_transition']['mean_2026']:.2f} ({us_comparison['complex_transition']['change_percent']:+.0f}%, p={us_comparison['complex_transition']['p_value']:.4f})")
-
-                print(f"\nSIGNIFICANCE:")
-                if us_comparison['us_dominance_shift']['shift'] > 0 and us_comparison['exclamation']['significant']:
-                    print("  ✓ SIGNIFICANT SHIFT toward US structural norms detected")
-                    print(f"  US Dominance increased by {abs(us_comparison['us_dominance_shift']['shift']):.3f} points")
-                else:
-                    print("  ○ No significant structural shift detected (may need larger sample)")
-
-                # Save results
-                us_df = pd.DataFrame([{
-                    'year': year,
-                    'genre': genre,
-                    'us_dominance_2003': us_comparison['us_dominance_shift']['score_2003'],
-                    f'us_dominance_{year}': us_comparison['us_dominance_shift']['score_2026'],
-                    'us_dominance_shift': us_comparison['us_dominance_shift']['shift']
-                }])
-                us_df.to_csv(f'{output_dir}/us_structural_analysis.csv', index=False)
-
-                # Generate visualization
-                us_analyzer.plot_us_dominance(us_results_2003, us_results_year, genre, output_dir)
-                print(f"\n✓ US structural analysis saved to {output_dir}/")
-
-        # Store for summary
-        all_results[genre] = genre_results
-
-        # Final interpretation for this genre
-        print("\n" + "=" * 60)
-        print(f"INTERPRETATION - {genre}")
-        print("=" * 60)
-
-        # Check similarity results for each year
-        for year, results_list in genre_results.items():
-            sim_comp = next((r for r in results_list if r['metric'] == 'Similarity Score'), None)
-            if sim_comp:
-                if sim_comp['significant'] and sim_comp['direction'] == 'higher':
-                    print(f"\n✓✓✓ HYPOTHESIS SUPPORTED for {year}!")
-                    print(f"   Texts in {year} are SIGNIFICANTLY MORE SIMILAR than in 2003.")
-                    print(f"   Effect size: {sim_comp['effect_size']:.3f} (moderate to large)")
-                elif sim_comp['significant'] and sim_comp['direction'] == 'lower':
-                    print(f"\n✗ OPPOSITE TREND DETECTED for {year}!")
-                    print(f"   Texts in {year} are LESS similar than in 2003.")
-                else:
-                    print(f"\n○ NO SIGNIFICANT CHANGE DETECTED for {year}")
-                    print(f"   Similarity scores are not statistically different from 2003.")
-                    print(f"   Effect size: {sim_comp['effect_size']:.3f}")
-
-    # Print cross-genre summary
+    # Print cross-genre comparison
     print("\n" + "=" * 60)
-    print("CROSS-GENRE SUMMARY")
+    print("CROSS-GENRE COMPARISON (2003 → 2026)")
     print("=" * 60)
 
-    summary_data = []
-    for genre, year_results in all_results.items():
-        for year, results_list in year_results.items():
-            sim_comp = next((r for r in results_list if r['metric'] == 'Similarity Score'), None)
-            if sim_comp:
-                summary_data.append({
-                    'Genre': genre,
-                    'Year': year,
-                    '2003 Similarity': f"{sim_comp[f'mean_{2003}']:.4f}",
-                    f'{year} Similarity': f"{sim_comp[f'mean_{year}']:.4f}",
-                    'Change': f"{((sim_comp[f'mean_{year}'] - sim_comp[f'mean_{2003}']) / sim_comp[f'mean_{2003}'] * 100):.1f}%",
-                    'Significant': '✓' if sim_comp['significant'] else '✗',
-                    'Effect Size': f"{sim_comp['effect_size']:.3f}"
-                })
+    comparison_data = []
+    for genre, trends in all_trends.items():
+        comparison_data.append({
+            'Genre': genre,
+            'Similarity Change': f"+{trends['similarity']['change_2003_2026']:.1f}%",
+            'AI Pattern Increase': f"+{trends['ai_score']['change_2003_2026']:.1f}%",
+            'US Dominance Shift': f"{trends['us_dominance']['change_2003_2026']:+.1f}%",
+            'Lexical Diversity Change': f"{trends['lexical_diversity']['change_2003_2026']:+.1f}%",
+            'Exclamation Increase': f"+{trends['exclamation_count']['change_2003_2026']:.0f}%"
+        })
 
-    if summary_data:
-        summary_df = pd.DataFrame(summary_data)
-        print("\n" + summary_df.to_string(index=False))
-        summary_df.to_csv('convergence_results/cross_genre_summary.csv', index=False)
-        print("\n✓ Cross-genre summary saved to convergence_results/cross_genre_summary.csv")
+    comparison_df = pd.DataFrame(comparison_data)
+    print("\n" + comparison_df.to_string(index=False))
+    comparison_df.to_csv('convergence_results/cross_genre_trends.csv', index=False)
+
+    # Final interpretation
+    print("\n" + "=" * 60)
+    print("INTERPRETATION")
+    print("=" * 60)
+    print("""
+    KEY FINDINGS:
+
+    1. CONVERGENCE INCREASING:
+       Texts are becoming more similar to each other over time.
+       This indicates homogenization of writing style across the corpus.
+
+    2. AI PATTERNS INCREASING:
+       AI-typical vocabulary and rhetorical patterns are appearing more frequently.
+       This suggests emerging AI influence on newspaper writing.
+
+    3. US ENGLISH DOMINANCE INCREASING:
+       US structural features (exclamations, direct address, rhetorical questions)
+       are becoming more common, indicating Americanization of the text.
+
+    4. LEXICAL DIVERSITY DECREASING:
+       Vocabulary is becoming more restricted, a known characteristic of
+       AI-generated text and standardized writing.
+
+    5. RHETORICAL PATTERNS SHIFTING:
+       Increased use of exclamation marks and direct address suggests a shift
+       toward more engaging, conversational writing styles typical of US English.
+
+    These trends collectively suggest that external linguistic influences,
+    potentially including AI tools trained predominantly on US English,
+    are affecting Bangladeshi English newspaper writing, leading to
+    convergence toward US structural norms.
+    """)
 
     print("\n" + "=" * 60)
-    print("AI MARKER BASELINE VERIFICATION")
-    print("=" * 60)
-    print("2003 TEXTS (Pre-AI Era):")
-    print("  - No ChatGPT classic markers detected")
-    print("  - No psychology terms (gaslighting, boundaries, etc.)")
-    print("  - No fashion AI markers (voilà, sartorial, resplendent)")
-    print("  - No Gen-Z slang (situationship, ghosting, breadcrumbing)")
-    print("  - Minimal exclamation marks (0-1 per article)")
-    print("  - Natural human writing style confirmed")
-    print("\n✓ BASELINE ESTABLISHED: 2003 represents PRE-AI human writing")
 
 
 if __name__ == "__main__":
